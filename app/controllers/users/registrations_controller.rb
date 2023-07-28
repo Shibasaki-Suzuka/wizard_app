@@ -4,6 +4,47 @@ class Users::RegistrationsController < Devise::RegistrationsController
   # before_action :configure_sign_up_params, only: [:create]
   # before_action :configure_account_update_params, only: [:update]
 
+  def new
+    @user = User.new
+  end
+
+  def create
+    # 1ページ目で入力した情報のバリデーションチェック
+    @user = User.new(sign_up_params)
+     unless @user.valid? # valid?メソッドを用いて、user.rbのバリデーションを実行
+       render :new and return # render :new_addressを2回実行しないためにreturn使用
+     end
+    # 1ページ目で入力した情報をsessionに保持させること
+    # attributesメソッド:インスタンスをオブジェクト型からハッシュ型に変換
+    # session:複数回に渡るリクエストにおいて、前のページの状態を保持するために利用される
+    session["devise.regist_data"] = {user: @user.attributes}
+    session["devise.regist_data"][:user]["password"] = params[:user][:password]
+    # 次の住所情報登録で使用するインスタンスを生成し、該当ページへ遷移すること
+    @address = @user.build_address
+    render :new_address
+  end
+
+  def create_address
+    # 2ページ目で入力した住所情報のバリデーションチェック
+    @user = User.new(session["devise.regist_data"]["user"])
+    @address = Address.new(address_params)
+      unless @address.valid? # valid?メソッドを用いて、address.rbのバリデーションを実行
+        render :new_address and return
+      end
+    # バリデーションチェックが完了した情報とsessionで保持していた情報を合わせ、ユーザー情報として保存
+    @user.build_address(@address.attributes)
+    @user.save
+    # sessionを削除する
+    session["devise.regist_data"]["user"].clear
+    # 新規登録後ログインをする
+    sign_in(:user, @user)
+  end
+
+  private
+
+  def address_params
+    params.require(:address).permit(:postal_code, :address)
+  end
   # GET /resource/sign_up
   # def new
   #   super
